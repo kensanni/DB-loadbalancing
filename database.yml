@@ -1,0 +1,24 @@
+---
+- hosts: master
+  become: true
+  remote_user: ubuntu
+  roles:
+    - masterDB
+
+- hosts: slave_one
+  become: true
+  remote_user: ubuntu
+  roles:
+    - slaveDB
+
+- hosts: slave_two
+  become: true
+  remote_user: ubuntu
+  roles:
+    - slaveDB
+
+- hosts: haproxy
+  become: true
+  remote_user: ubuntu
+  roles:
+    - HAProxy

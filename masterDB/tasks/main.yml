@@ -1,0 +1,89 @@
+---
+- name: Install MySQL
+  apt:
+    name: mysql-server
+    state: present
+    update_cache: yes
+
+- name: Install Additional packages
+  apt:
+    name: ['python-mysqldb', 'python3-pip', 'mysql-client']
+    state: present 
+
+- name: Install pip
+  apt:
+    name: python-pip
+    update_cache: yes
+    state: present
+
+- name: Install PyMySQL with pip
+  pip:
+    name: PyMySQL
+
+- name: Update MySQL cnf configuration
+  lineinfile:
+    path: /etc/mysql/mysql.conf.d/mysqld.cnf
+    regexp: '{{ item.regexp }}'
+    line: '{{ item.line }}'
+  with_items:
+    - { regexp: '^bind-address', line: 'bind-address = 0.0.0.0' }
+    - { regexp: '^#server-id', line: 'server-id = 1' }
+    - { regexp: '^#log_bin', line: 'log_bin = /var/log/mysql/mysql-bin.log' }
+    - { regexp: '^#binlog_do_db', line: "binlog_do_db = '{{ database_name }}'" }
+  notify:
+    - Restart MySQL
+
+- name: sql query
+  command:  mysql -u root --execute="ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '"{{ mysql_password }}"';"
+
+- name: Create ~/.my.cnf
+  file:
+    path: /root/.my.cnf
+    state: touch
+
+- name: Insert Credentials into ~/.my.cnf
+  blockinfile:
+    path: /root/.my.cnf
+    block: |
+      [client]
+      user={{ mysql_user }}
+      password={{ mysql_password }}
+
+- name: Insert Credentials into ~/.my.cnf
+  blockinfile:
+    path: ~/.my.cnf
+    block: |
+      [client]
+      user={{ mysql_user }}
+      password={{ mysql_password }}
+
+- name: Create slave user and grant database privileges
+  mysql_user:
+    name: slave_user
+    password: "{{ database_password }}"
+    priv: '*.*:REPLICATION SLAVE'
+    host: '%'
+    state: present
+
+- name: Create database
+  mysql_db:
+    name: "{{ database_name }}"
+    state: present
+
+- name: Flush sql privileges
+  command: mysql -u root --execute="FLUSH PRIVILEGES"
+
+- name: Use newly created database
+  command: mysql -u root --execute="USE {{ database_name }}"
+
+- name: Lock database to prevent any new changes
+  command: mysql -u root --execute="FLUSH TABLES WITH READ LOCK"
+
+- name: Show master status
+  mysql_replication:
+    mode: getmaster
+  register: master_status
+
+- name:  Print master status
+  debug:
+    var: master_status

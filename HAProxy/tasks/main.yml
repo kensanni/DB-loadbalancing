@@ -1,0 +1,24 @@
+---
+- name: Install MySQL
+  apt:
+    name: mysql-server
+    state: present
+    update_cache: yes
+
+- name: Install HAProxy
+  apt:
+    name: haproxy
+    state: present
+
+- name: Remove default HAProxy configuration
+  file:
+    path: /etc/haproxy/haproxy.cfg
+    state: absent
+
+- name: Create HAProxy configuration
+  template:
+    src: haproxy.cfg
+    dest: /etc/haproxy/haproxy.cfg
+  notify:
+    - restart HAproxy
+

@@ -1,0 +1,66 @@
+---
+- name: Install MySQL
+  apt:
+    name: mysql-server
+    state: present
+    update_cache: yes
+
+- name: Install Additional packages
+  apt:
+    name: ['python-mysqldb', 'python3-pip', 'mysql-client']
+    state: present 
+
+- name: Install pip
+  apt:
+    name: python-pip
+    update_cache: yes
+    state: present
+
+- name: Install PyMySQL with pip
+  pip:
+    name: PyMySQL
+
+- name: sql query
+  command:  mysql -u root --execute="ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '"{{ mysql_password }}"';"
+
+- name: Update MySQL cnf configuration
+  lineinfile:
+    path: /etc/mysql/mysql.conf.d/mysqld.cnf
+    regexp: '{{ item.regexp }}'
+    line: '{{ item.line }}'
+  with_items:
+    - { regexp: '^bind-address', line: 'bind-address = 0.0.0.0' }
+    - { regexp: '^#server-id', line: 'server-id = 2' }
+    - { regexp: '^#log_bin', line: 'log_bin = /var/log/mysql/mysql-bin.log' }
+    - { regexp: '^#binlog_do_db', line: "binlog_do_db = '{{ database_name }}'" }
+  notify:
+    - Restart MySQL
+
+- name: Create database
+  mysql_db:
+    name: "{{ database_name }}"
+    state: present
+
+- name: Stop mysql slave thread
+  mysql_replication:
+    mode: stopslave
+
+- name: Change master to master server
+  mysql_replication:
+    mode: changemaster
+    master_host: "{{ master_host }}"
+    master_log_file: "{{ master_status.File }}"
+    master_log_pos: "{{ master_status.Position }}"
+
+- name: Start slave
+  mysql_replication:
+    mode: startslave
+
+- name: Show slave status
+  mysql_replication:
+    mode: getslave
+  register: slave_status
+
+- name: Print out slave status to terminal  
+  debug:
+    var: slave_status
